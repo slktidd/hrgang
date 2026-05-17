@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HrGang</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 400px;
+      min-height: 200px;
+      max-height: 600px;
+      overflow-y: auto;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      background: #f0f4f9;
+      color: #1a2a3a;
+    }
+
+    /* ШАПКА */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #1a3a5c;
+      padding: 12px 16px 0;
+    }
+    .logo {
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .logo-dot {
+      width: 8px; height: 8px;
+      background: #4fc3f7;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .tabs {
+      display: flex;
+      gap: 2px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 7px 0;
+      font-size: 12px;
+      font-family: 'DM Sans', sans-serif;
+      color: rgba(255,255,255,0.55);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      border-radius: 6px 6px 0 0;
+      transition: all 0.15s;
+      font-weight: 600;
+    }
+    .tab-btn:hover:not(.active) { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.1); }
+    .tab-btn.active { background: #f0f4f9; color: #1a3a5c; }
+
+    /* ТЕЛО */
+    .body { padding: 14px 16px; }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ФОРМА */
+    .field { margin-bottom: 11px; }
+    .label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #4a6080;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .inp {
+      width: 100%;
+      border: 1px solid #c8d8e8;
+      border-radius: 7px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      background: #fff;
+      color: #1a2a3a;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .inp:focus { border-color: #378add; box-shadow: 0 0 0 2px rgba(55,138,221,0.12); }
+    textarea.inp { resize: vertical; min-height: 70px; }
+    select.inp {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a6080'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 28px;
+      cursor: pointer;
+    }
+
+    /* КНОПКИ */
+    .btn {
+      padding: 8px 14px;
+      border-radius: 7px;
+      border: none;
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: #1a3a5c; color: #fff; }
+    .btn-primary:hover { background: #0f2540; }
+    .btn-block { width: 100%; }
+    .btn-big { padding: 12px 14px; font-size: 14px; }
+    .btn-sm { padding: 5px 10px; font-size: 11px; border-radius: 5px; }
+    .btn-outline { background: #fff; color: #1a3a5c; border: 1px solid #c8d8e8; }
+    .btn-outline:hover { background: #eef4fb; }
+    .btn-danger { background: #fff0f0; color: #a32d2d; border: 1px solid #f7c1c1; }
+    .btn-danger:hover { background: #fde8e8; }
+
+    /* РЯД */
+    .row { display: flex; gap: 8px; align-items: center; }
+
+    /* БАННЕР */
+    .banner-warning {
+      background: #fff8e1;
+      border: 1px solid #ffcc02;
+      border-radius: 7px;
+      padding: 9px 12px;
+      font-size: 12px;
+      color: #7a5500;
+      margin-bottom: 12px;
+    }
+    .banner-error {
+      background: #fff0f0;
+      border: 1px solid #f7c1c1;
+      border-radius: 7px;
+      padding: 9px 12px;
+      font-size: 12px;
+      color: #a32d2d;
+      margin-bottom: 12px;
+    }
+
+    /* ТОСТ */
+    .toast {
+      border-radius: 7px;
+      padding: 8px 12px;
+      font-size: 12px;
+      text-align: center;
+      margin-top: 8px;
+      display: none;
+    }
+    .toast-success { background: #e8f5e9; border: 1px solid #a5d6a7; color: #2e7d32; }
+    .toast-error { background: #fff0f0; border: 1px solid #f7c1c1; color: #a32d2d; }
+
+    /* ЗОНА ЗАГРУЗКИ */
+    .upload-zone {
+      border: 1.5px dashed #c8d8e8;
+      border-radius: 7px;
+      padding: 12px;
+      text-align: center;
+      font-size: 12px;
+      color: #6a80a0;
+      cursor: pointer;
+      background: #f8fbff;
+      transition: all 0.15s;
+    }
+    .upload-zone:hover { border-color: #378add; background: #eef4fb; color: #1a3a5c; }
+
+    /* СПИННЕР */
+    .loading-block {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 20px 0;
+      font-size: 13px;
+      color: #4a6080;
+    }
+    .spinner {
+      width: 22px; height: 22px;
+      border: 2.5px solid #c8d8e8;
+      border-top-color: #378add;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* РЕЗУЛЬТАТЫ */
+    .results-block { display: none; }
+
+    .score-wrap { text-align: center; margin: 12px 0 10px; }
+    .score-circle {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      transform: scale(0);
+      transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .score-circle.pop { transform: scale(1); }
+    .score-label { font-size: 12px; color: #4a6080; margin-top: 6px; font-weight: 600; }
+
+    .report-btns { display: flex; gap: 8px; margin: 10px 0; }
+    .report-btns .btn { flex: 1; font-size: 12px; }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #1a3a5c;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin: 12px 0 5px;
+    }
+    .result-list { list-style: none; padding: 0; }
+    .result-list li {
+      font-size: 12.5px;
+      color: #2a3a4a;
+      padding: 3px 0 3px 16px;
+      position: relative;
+      line-height: 1.4;
+    }
+    .result-list li::before { position: absolute; left: 0; }
+    .pros-list li::before { content: '✓'; color: #2e7d32; font-weight: 700; }
+    .cons-list li::before { content: '✗'; color: #a32d2d; font-weight: 700; }
+    .risks-list li::before { content: '⚠'; color: #e65100; }
+
+    .verdict-box {
+      background: #eef4fb;
+      border-left: 3px solid #378add;
+      border-radius: 0 7px 7px 0;
+      padding: 10px 12px;
+      font-size: 12.5px;
+      color: #1a2a3a;
+      line-height: 1.5;
+      margin-top: 5px;
+    }
+
+    /* ИСТОРИЯ */
+    .hist-card {
+      background: #fff;
+      border: 1px solid #c8d8e8;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .hist-info { flex: 1; min-width: 0; }
+    .hist-name { font-size: 13px; font-weight: 600; color: #1a2a3a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hist-pos { font-size: 11px; color: #6a80a0; margin-top: 1px; }
+    .hist-date { font-size: 10px; color: #9ab0c8; margin-top: 1px; }
+    .hist-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .score-badge {
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .hist-replay {
+      background: none;
+      border: 1px solid #c8d8e8;
+      border-radius: 5px;
+      padding: 4px 7px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+    .hist-replay:hover { background: #eef4fb; border-color: #378add; }
+
+    .empty-state {
+      text-align: center;
+      padding: 30px 0;
+      color: #9ab0c8;
+      font-size: 13px;
+    }
+    .empty-state div { font-size: 28px; margin-bottom: 8px; }
+
+    .hist-link {
+      color: #378add;
+      font-size: 10px;
+      text-decoration: none;
+      margin-left: 4px;
+    }
+    .hist-link:hover { text-decoration: underline; }
+
+    /* ПОДВАЛ */
+    .footer {
+      text-align: center;
+      padding: 10px 0 12px;
+      font-size: 11px;
+      color: #7a90a8;
+      border-top: 1px solid #dde8f0;
+      margin-top: 8px;
+    }
+    .footer a { color: #378add; font-weight: 600; text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+
+    /* ДЕТАЛИ */
+    details summary {
+      cursor: pointer;
+      font-size: 12px;
+      color: #378add;
+      padding: 6px 0;
+      user-select: none;
+    }
+    details summary:hover { color: #1a3a5c; }
+    details[open] summary { margin-bottom: 8px; }
+
+    /* ПРЕВЬЮ ИЗОБРАЖЕНИЯ */
+    #imagePreview img { max-width: 100%; border-radius: 6px; margin-top: 8px; }
+
+    .api-key-wrap { position: relative; }
+    .api-key-wrap .inp { padding-right: 38px; }
+    .eye-btn {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      color: #6a80a0;
+      padding: 2px;
+    }
+    .eye-btn:hover { color: #1a3a5c; }
+  </style>
+</head>
+<body>
+
+<!-- ШАПКА -->
+<div class="header">
+  <div class="logo">
+    <span class="logo-dot"></span> HrGang
+  </div>
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-main" >Главная</button>
+    <button class="tab-btn" id="tab-history" >История</button>
+    <button class="tab-btn" id="tab-settings" >Настройки</button>
+  </div>
+</div>
+
+<div class="body">
+
+  <!-- ГЛАВНАЯ -->
+  <div class="view active" id="view-main">
+    <div class="banner-warning" id="warningBanner">
+      ⚡ Откройте резюме на hh.kz для оценки
+    </div>
+    <div class="field">
+      <label class="label">Профиль вакансии</label>
+      <select class="inp" id="mainProfileSelect">
+        <option value="">— Выберите профиль —</option>
+      </select>
+    </div>
+    <button class="btn btn-primary btn-block btn-big" id="evaluateBtn">
+      ▶ Оценить кандидата
+    </button>
+    <div style="margin-top:10px;">
+      <details id="manualInputSection">
+        <summary>✏️ Ввести резюме вручную</summary>
+        <textarea class="inp" id="manualResumeText" rows="5"
+          placeholder="Вставьте сюда текст резюме, если не открыта страница hh.kz..."></textarea>
+      </details>
+    </div>
+    <div class="loading-block" id="loadingBlock">
+      <div class="spinner"></div>
+      <span>ИИ анализирует резюме...</span>
+    </div>
+    <div class="results-block" id="resultsBlock">
+      <div class="score-wrap">
+        <div class="score-circle" id="scoreCircle">0</div>
+        <div class="score-label" id="scoreLabel"></div>
+      </div>
+      <div class="report-btns">
+        <button class="btn btn-outline btn-sm" id="copyReportBtn">📋 Скопировать отчёт</button>
+        <button class="btn btn-outline btn-sm" id="saveToHistoryBtn">💾 Сохранить</button>
+      </div>
+      <div class="section-title">✅ Плюсы</div>
+      <ul class="result-list pros-list" id="prosList"></ul>
+      <div class="section-title">❌ Минусы</div>
+      <ul class="result-list cons-list" id="consList"></ul>
+      <div class="section-title">⚠️ Нестыковки / Риски</div>
+      <ul class="result-list risks-list" id="risksList"></ul>
+      <div class="section-title">Вердикт</div>
+      <div class="verdict-box" id="verdictText"></div>
+    </div>
+  </div>
+
+  <!-- ИСТОРИЯ -->
+  <div class="view" id="view-history">
+    <div id="historyList"></div>
+    <div class="empty-state" id="historyEmpty" style="display:none">
+      <div>📭</div>
+      История пока пуста
+    </div>
+    <button class="btn btn-danger btn-sm" id="clearHistoryBtn" style="margin-top:6px;">
+      🗑 Очистить историю
+    </button>
+  </div>
+
+  <!-- НАСТРОЙКИ -->
+  <div class="view" id="view-settings">
+    <div class="field">
+      <label class="label">API ключ Gemini</label>
+      <div class="api-key-wrap">
+        <input type="password" class="inp" id="apiKeyInput" placeholder="AIza...">
+        <button class="eye-btn" id="toggleApiKey" title="Показать/скрыть">👁</button>
+      </div>
+      <div class="toast toast-error" id="apiKeyError">⚠️ Введите API ключ</div>
+    </div>
+    <div class="field">
+      <label class="label">Профиль вакансии</label>
+      <select class="inp" id="profileSelect"></select>
+      <div class="row" style="margin-top:7px;">
+        <button class="btn btn-outline btn-sm" id="addProfileBtn">➕ Новый профиль</button>
+        <button class="btn btn-danger btn-sm" id="deleteProfileBtn">🗑 Удалить</button>
+      </div>
+      <div id="newProfileRow" style="display:none; margin-top:8px;">
+        <div class="row">
+          <input class="inp" id="newProfileName" placeholder="Название профиля" style="flex:1;">
+          <button class="btn btn-primary btn-sm" id="confirmAddProfile">Добавить</button>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label class="label">Описание вакансии</label>
+      <textarea class="inp" id="vacancyDesc" rows="4"
+        placeholder="Требования, задачи, стек технологий..."></textarea>
+    </div>
+    <div class="field">
+      <label class="label">Пожелания заказчика (бриф)</label>
+      <textarea class="inp" id="clientBrief" rows="3"
+        placeholder="Личные пожелания, особенности кандидата..."></textarea>
+    </div>
+    <div class="field">
+      <label class="label">Скриншот брифа (необязательно)</label>
+      <div class="upload-zone" id="uploadZone">
+        📎 Нажмите для загрузки изображения
+      </div>
+      <input type="file" id="briefImage" accept="image/*" style="display:none;">
+      <div id="imagePreview"></div>
+    </div>
+    <button class="btn btn-primary btn-block" id="saveSettingsBtn">💾 Сохранить настройки</button>
+    <div class="toast toast-success" id="saveToast">✅ Настройки сохранены</div>
+  </div>
+
+</div>
+
+<div class="footer">
+  Разработано: <a href="https://t.me/iddcoach" target="_blank">iddcoach</a>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>
