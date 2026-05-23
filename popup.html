@@ -172,27 +172,33 @@
     }
     .upload-zone:hover { border-color: #378add; background: #eef4fb; color: #1a3a5c; }
 
-    /* СПИННЕР */
+    /* СКЕЛЕТОН ЗАГРУЗКИ */
     .loading-block {
       display: none;
-      align-items: center;
-      justify-content: center;
+      flex-direction: column;
       gap: 10px;
-      padding: 20px 0;
-      font-size: 13px;
-      color: #4a6080;
+      padding: 15px 0;
     }
-    .spinner {
-      width: 22px; height: 22px;
-      border: 2.5px solid #c8d8e8;
-      border-top-color: #378add;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      flex-shrink: 0;
+    .skeleton-line {
+      height: 14px;
+      background: linear-gradient(90deg, #eef4fb 25%, #dbe7f4 50%, #eef4fb 75%);
+      background-size: 200% 100%;
+      border-radius: 4px;
+      animation: skeleton-load 1.5s infinite;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .skeleton-line.short { width: 60%; }
+    .skeleton-line.circle { width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 10px; }
+    .skeleton-title { text-align: center; font-size: 13px; color: #4a6080; margin-bottom: 5px; }
+    @keyframes skeleton-load {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
 
     /* РЕЗУЛЬТАТЫ */
+    .results-header { text-align: center; margin-bottom: 15px; }
+    .res-name { font-size: 16px; font-weight: 700; color: #1a3a5c; }
+    .res-pos { font-size: 12px; color: #6a80a0; margin-top: 3px; }
+
     .results-block { display: none; }
 
     .score-wrap { text-align: center; margin: 12px 0 10px; }
@@ -378,10 +384,21 @@
       </details>
     </div>
     <div class="loading-block" id="loadingBlock">
-      <div class="spinner"></div>
-      <span>ИИ анализирует резюме...</span>
+      <div class="skeleton-title">ИИ анализирует резюме...</div>
+      <div class="skeleton-line circle"></div>
+      <div class="skeleton-line"></div>
+      <div class="skeleton-line"></div>
+      <div class="skeleton-line short"></div>
+    </div>
+    <div class="error-block" id="errorBlock" style="display:none; margin-bottom:15px;">
+      <div id="errorText" style="background:#fff0f0; border:1px solid #f7c1c1; border-radius:7px; padding:12px; color:#a32d2d; font-size:12.5px; line-height:1.5; margin-bottom:15px;"></div>
+      <button class="btn btn-primary btn-block" id="newEvalErrBtn">🔄 Новая оценка</button>
     </div>
     <div class="results-block" id="resultsBlock">
+      <div class="results-header">
+        <div class="res-name" id="resCandidateName"></div>
+        <div class="res-pos" id="resCandidatePos"></div>
+      </div>
       <div class="score-wrap">
         <div class="score-circle" id="scoreCircle">0</div>
         <div class="score-label" id="scoreLabel"></div>
@@ -398,6 +415,7 @@
       <ul class="result-list risks-list" id="risksList"></ul>
       <div class="section-title">Вердикт</div>
       <div class="verdict-box" id="verdictText"></div>
+      <button class="btn btn-primary btn-block" id="newEvalBtn" style="margin-top:15px;">🔄 Новая оценка</button>
     </div>
   </div>
 
@@ -422,6 +440,9 @@
         <button class="eye-btn" id="toggleApiKey" title="Показать/скрыть">👁</button>
       </div>
       <div class="toast toast-error" id="apiKeyError">⚠️ Введите API ключ</div>
+      <div style="font-size: 10px; margin-top: 4px; color: #6a80a0;">
+        Получить бесплатный ключ: <a href="https://aistudio.google.com/apikey" target="_blank" style="color: #378add; text-decoration: none;">Google AI Studio</a>
+      </div>
     </div>
     <div class="field">
       <label class="label">Профиль вакансии</label>
@@ -440,12 +461,12 @@
     <div class="field">
       <label class="label">Описание вакансии</label>
       <textarea class="inp" id="vacancyDesc" rows="4"
-        placeholder="Требования, задачи, стек технологий..."></textarea>
+        placeholder="Пример: Опыт от 3 лет, знание React и TypeScript. Задачи: разработка новых фич... (если пусто — резюме оценивается в общем виде)"></textarea>
     </div>
     <div class="field">
       <label class="label">Пожелания заказчика (бриф)</label>
       <textarea class="inp" id="clientBrief" rows="3"
-        placeholder="Личные пожелания, особенности кандидата..."></textarea>
+        placeholder="Пример: Ищем спокойного человека, который умеет работать самостоятельно..."></textarea>
     </div>
     <div class="field">
       <label class="label">Скриншот брифа (необязательно)</label>
