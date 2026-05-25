@@ -351,18 +351,11 @@ function getResumeFromPage(tabId) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('timeout')), 5000);
     try {
-      chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        func: extractResumeData
-      }, (results) => {
+      chrome.tabs.sendMessage(tabId, { action: 'getResume' }, response => {
         clearTimeout(timer);
         if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
-        if (results && results[0] && results[0].result) {
-          const res = results[0].result;
-          if (res.success && res.text) return resolve(res);
-          return reject(new Error(res.error || 'Нет данных'));
-        }
-        reject(new Error('Нет данных'));
+        if (response && response.success && response.text) return resolve(response);
+        reject(new Error(response?.error || 'Нет данных'));
       });
     } catch (e) {
       clearTimeout(timer);
@@ -451,7 +444,7 @@ async function onEvaluate() {
 
     const [tab] = await new Promise(r => chrome.tabs.query({ active: true, currentWindow: true }, r));
     tabUrl = tab?.url || '';
-    const isHH = /https?:\/\/([a-z-]+\.)?hh\.(kz|ru)\/resume\//.test(tabUrl);
+    const isHH = /https?:\/\/([a-z-]+\.)?(hh\.(ru|kz|uz|by)|rabota\.by)\/resume\//.test(tabUrl);
 
     let candidateName = '';
     let candidatePos = '';
@@ -472,7 +465,7 @@ async function onEvaluate() {
     }
 
     if (!resumeText) {
-      throw new Error('Откройте страницу резюме на hh.kz или вставьте текст резюме вручную');
+      throw new Error('Откройте страницу резюме на HeadHunter или вставьте текст резюме вручную');
     }
 
     // Строим промпт
@@ -678,8 +671,8 @@ async function renderHistory() {
       card.querySelector('.open-resume').addEventListener('click', async (e) => {
         e.preventDefault();
         const url = e.target.getAttribute('data-url');
-        const tabs = await chrome.tabs.query({ url: "*://*.hh.kz/resume/*" });
-        const existingTab = tabs.find(t => t.url === url) || (await chrome.tabs.query({ url: "*://*.hh.ru/resume/*" })).find(t => t.url === url);
+        const allTabs = await chrome.tabs.query({});
+        const existingTab = allTabs.find(t => t.url === url);
         if (existingTab) {
           await chrome.tabs.update(existingTab.id, { active: true });
           await chrome.windows.update(existingTab.windowId, { focused: true });
@@ -723,7 +716,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Проверяем — открыта ли страница резюме
   try {
     const [tab] = await new Promise(r => chrome.tabs.query({ active: true, currentWindow: true }, r));
-    const isHH = tab && /https?:\/\/([a-z-]+\.)?hh\.(kz|ru)\/resume\//.test(tab.url);
+    const isHH = tab && /https?:\/\/([a-z-]+\.)?(hh\.(ru|kz|uz|by)|rabota\.by)\/resume\//.test(tab.url);
     document.getElementById('warningBanner').style.display = isHH ? 'none' : 'block';
     if (!isHH) document.getElementById('manualInputSection').open = true;
   } catch (e) { /* оставляем баннер */ }

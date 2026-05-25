@@ -4,78 +4,42 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "getResume") {
     try {
-      const getText = (selectors) => {
-        for (const sel of selectors) {
-          const el = document.querySelector(sel);
-          if (el && el.innerText.trim()) return el.innerText.trim();
-        }
-        return "";
-      };
+      // Ищем основной блок резюме, если не находим - берём весь body
+      const resumeBlock = document.querySelector('[data-qa="resume-main"]') || document.body;
+      const clone = resumeBlock.cloneNode(true);
 
-      // Имя кандидата
-      const name = getText([
-        '[data-qa="resume-personal-name"]',
-        'h1.resume-block__title-text',
-        'h1'
-      ]);
+      // Находим и удаляем все интерактивные, технические и вспомогательные теги
+      const selectorsToRemove = [
+        'button', 'input', 'select', 'textarea', 'option',
+        '[role="button"]', '[role="tab"]', '[role="menu"]', '[role="dialog"]',
+        'header', 'footer', 'nav', 'aside', 'noscript',
+        'script', 'style',
+        '.bloko-button', '[data-qa="sidebar-actions"]'
+      ];
 
-      // Желаемая должность
-      const position = getText([
-        '[data-qa="resume-block-title-position"]',
-        '.resume-block__title',
-        '[data-qa="resume-block-position"] .resume-block__title'
-      ]);
-
-      // Опыт работы
-      let experienceText = "";
-      const expItems = document.querySelectorAll('[data-qa="resume-block-experience-item"]');
-      expItems.forEach((item, i) => {
-        const company = item.querySelector('[data-qa="resume-block-experience-company"]')?.innerText?.trim() || "";
-        const role = item.querySelector('[data-qa="resume-block-experience-position"]')?.innerText?.trim() || "";
-        const duration = item.querySelector('.resume-block__experience-timeinterval')?.innerText?.trim() || "";
-        const desc = item.querySelector('[data-qa="resume-block-experience-description"]')?.innerText?.trim() || "";
-        experienceText += `\n[Место ${i+1}] ${company} — ${role} (${duration})\n${desc}\n`;
+      selectorsToRemove.forEach(selector => {
+        const elements = clone.querySelectorAll(selector);
+        elements.forEach(el => el.remove());
       });
 
-      // Навыки
-      const skillTags = document.querySelectorAll('[data-qa="bloko-tag__text"]');
-      const skills = Array.from(skillTags).map(t => t.innerText.trim()).join(", ");
+      // Достаём текст
+      let rawText = clone.innerText || clone.textContent || '';
 
-      // О себе
-      const about = getText([
-        '[data-qa="resume-block-skills-content"]',
-        '[data-qa="resume-block-additional"] .resume-block__content'
-      ]);
+      // Сжимаем пробелы и переносы
+      let cleanText = rawText.replace(/\s+/g, ' ').trim();
 
-      // Образование
-      const eduItems = document.querySelectorAll('[data-qa="resume-block-education-item"]');
-      let educationText = "";
-      eduItems.forEach(item => {
-        educationText += item.innerText.trim() + "\n";
-      });
-
-      // Зарплата
-      const salary = getText([
-        '[data-qa="resume-block-salary"]',
-        '.resume-block__salary'
-      ]);
-
-      // Собираем итоговый текст
-      let resumeText = "";
-      if (name) resumeText += `ИМЯ: ${name}\n`;
-      if (position) resumeText += `ДОЛЖНОСТЬ: ${position}\n`;
-      if (salary) resumeText += `ЗАРПЛАТА: ${salary}\n`;
-      if (experienceText) resumeText += `\nОПЫТ РАБОТЫ:${experienceText}`;
-      if (skills) resumeText += `\nНАВЫКИ: ${skills}\n`;
-      if (educationText) resumeText += `\nОБРАЗОВАНИЕ:\n${educationText}`;
-      if (about) resumeText += `\nО СЕБЕ:\n${about}`;
-
-      if (!resumeText.trim()) {
-        // Fallback: берём весь видимый текст страницы
-        resumeText = document.body.innerText.substring(0, 5000);
+      // Ограничиваем длину
+      if (cleanText.length > 3000) {
+        cleanText = cleanText.substring(0, 3000) + '... (текст обрезан)';
       }
 
-      sendResponse({ success: true, text: resumeText, name, position });
+      // Пытаемся также достать имя и должность для UI
+      const nameEl = document.querySelector('[data-qa="resume-personal-name"], h1.resume-block__title-text, h1');
+      const posEl = document.querySelector('[data-qa="resume-block-title-position"], .resume-block__title');
+      const name = nameEl ? nameEl.innerText.trim() : '';
+      const position = posEl ? posEl.innerText.trim() : '';
+
+      sendResponse({ success: true, text: cleanText, name, position });
     } catch (e) {
       sendResponse({ success: false, error: e.message });
     }
