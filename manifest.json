@@ -11,10 +11,16 @@
     "clipboardWrite"
   ],
   "host_permissions": [
-    "https://hh.kz/*",
-    "https://*.hh.kz/*",
-    "https://hh.ru/*",
-    "https://*.hh.ru/*"
+    "*://*.hh.ru/*",
+    "*://hh.ru/*",
+    "*://*.hh.kz/*",
+    "*://hh.kz/*",
+    "*://*.hh.uz/*",
+    "*://hh.uz/*",
+    "*://*.hh.by/*",
+    "*://hh.by/*",
+    "*://*.rabota.by/*",
+    "*://rabota.by/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -34,10 +40,16 @@
   "content_scripts": [
     {
       "matches": [
-        "https://hh.kz/resume/*",
-        "https://*.hh.kz/resume/*",
-        "https://hh.ru/resume/*",
-        "https://*.hh.ru/resume/*"
+        "*://*.hh.ru/resume/*",
+        "*://hh.ru/resume/*",
+        "*://*.hh.kz/resume/*",
+        "*://hh.kz/resume/*",
+        "*://*.hh.uz/resume/*",
+        "*://hh.uz/resume/*",
+        "*://*.hh.by/resume/*",
+        "*://hh.by/resume/*",
+        "*://*.rabota.by/resume/*",
+        "*://rabota.by/resume/*"
       ],
       "js": [
         "content.js"

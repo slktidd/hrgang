@@ -9,10 +9,6 @@ const SK = {
   HISTORY:        'hrgang_history'
 };
 
-// API ключ зашит в коде как дефолтный
-// (пользователь может заменить в настройках)
-const _dk = atob('QUl6YVN5QmlDTWtLRHZEUTVIR29ubUlKTDRIRlBjSFZqUnVWdE5r');
-
 let lastResult = null;
 let briefImageBase64 = '';
 
@@ -56,8 +52,9 @@ function getScoreLabel(s) {
 
 // Нормализация оценки строго в диапазон 0–10
 function normalizeScore(raw) {
-  let s = parseFloat(raw) || 0;
-  if (s > 10) s = Math.round(s / 10); // если пришло по 100-балльной
+  let s = parseFloat(raw);
+  if (isNaN(s)) return 0;
+  if (s > 10) s = s / 10; // если пришло по 100-балльной (например, 78 -> 7.8)
   return Math.max(0, Math.min(10, Math.round(s)));
 }
 
@@ -128,12 +125,16 @@ function showImagePreview(b64) {
 // НАСТРОЙКИ
 // ─────────────────────────────────────────────
 async function initSettings() {
-  // Загружаем сохранённый ключ или используем дефолтный
   const stored = await getStorage(SK.API_KEY);
-  const apiKey = stored || _dk;
   const inp = document.getElementById('apiKeyInput');
-  if (inp) inp.value = apiKey;
-  if (!stored) await setStorage(SK.API_KEY, _dk);
+  if (inp) inp.value = stored || '';
+
+  if (!stored) {
+    switchTab('settings');
+    const toast = document.getElementById('apiKeyError');
+    toast.textContent = 'Для начала работы введите ваш API ключ Gemini';
+    showToast('apiKeyError', 5000);
+  }
 
   // Показать/скрыть ключ
   document.getElementById('toggleApiKey').addEventListener('click', () => {
@@ -177,12 +178,32 @@ async function initSettings() {
     await renderProfileSelects();
   });
 
+  let autoSaveTimeout = null;
+  const debouncedAutoSave = async () => {
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(async () => {
+      const profiles = await loadProfiles();
+      const activeId = parseInt(document.getElementById('profileSelect').value);
+      const idx = profiles.findIndex(p => p.id === activeId);
+      if (idx >= 0) {
+        profiles[idx].description = document.getElementById('vacancyDesc').value;
+        profiles[idx].brief = document.getElementById('clientBrief').value;
+        profiles[idx].imageBase64 = briefImageBase64;
+        await setStorage(SK.PROFILES, profiles);
+      }
+    }, 500);
+  };
+
+  document.getElementById('vacancyDesc').addEventListener('input', debouncedAutoSave);
+  document.getElementById('clientBrief').addEventListener('input', debouncedAutoSave);
+
   // Сменить профиль в настройках
   document.getElementById('profileSelect').addEventListener('change', async function () {
     const profiles = await loadProfiles();
     const sel = profiles.find(p => p.id == this.value);
     if (!sel) return;
     await setStorage(SK.ACTIVE_PROFILE, sel.id);
+    document.getElementById('mainProfileSelect').value = sel.id;
     document.getElementById('vacancyDesc').value = sel.description || '';
     document.getElementById('clientBrief').value = sel.brief || '';
     briefImageBase64 = sel.imageBase64 || '';
@@ -197,9 +218,10 @@ async function initSettings() {
     const file = this.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = e => {
+    reader.onload = async (e) => {
       briefImageBase64 = e.target.result.split(',')[1];
       showImagePreview(briefImageBase64);
+      await debouncedAutoSave();
     };
     reader.readAsDataURL(file);
   });
@@ -233,6 +255,11 @@ function buildPrompt(resumeText, profile) {
   const hasVacancy = (profile.description || '').trim().length > 10;
   const hasBrief   = (profile.brief || '').trim().length > 5;
 
+  const jsonFormat = `Ответь СТРОГО только валидным JSON. Без markdown, без текста до и после JSON.
+ВАЖНО: "score" — строго целое число от 0 до 10 (НЕ от 0 до 100). Если у тебя получается 78, верни 8.
+Верни ТОЛЬКО JSON:
+{"score":7,"name":"имя","position":"должность","label":"метка","pros":["..."],"cons":["..."],"risks":["..."],"verdict":"..."}`;
+
   if (!hasVacancy && !hasBrief) {
     // Режим общей оценки резюме без привязки к вакансии
     return `Ты опытный HR-рекрутер. Дай общую профессиональную оценку резюме кандидата.
@@ -242,10 +269,7 @@ function buildPrompt(resumeText, profile) {
 РЕЗЮМЕ КАНДИДАТА:
 ${resumeText}
 
-Ответь СТРОГО только валидным JSON. Без markdown, без текста до и после JSON.
-ВАЖНО: "score" — целое число от 0 до 10 (НЕ от 0 до 100).
-Верни ТОЛЬКО JSON:
-{"score":7,"name":"имя","position":"должность","label":"метка","pros":["..."],"cons":["..."],"risks":["..."],"verdict":"..."}`;
+${jsonFormat}`;
   }
 
   // Режим оценки под конкретную вакансию
@@ -258,15 +282,71 @@ ${resumeText}
 ${context}РЕЗЮМЕ КАНДИДАТА:
 ${resumeText}
 
-Ответь СТРОГО только валидным JSON. Без markdown, без текста до и после JSON.
-ВАЖНО: "score" — целое число от 0 до 10 (НЕ от 0 до 100).
-Верни ТОЛЬКО JSON:
-{"score":7,"name":"имя","position":"должность","label":"метка","pros":["..."],"cons":["..."],"risks":["..."],"verdict":"..."}`;
+${jsonFormat}`;
 }
 
 // ─────────────────────────────────────────────
 // ИЗВЛЕЧЕНИЕ РЕЗЮМЕ СО СТРАНИЦЫ
 // ─────────────────────────────────────────────
+function extractResumeData() {
+  try {
+    const getText = (selectors) => {
+      for (const sel of selectors) {
+        const el = document.querySelector(sel);
+        if (el && el.innerText.trim()) return el.innerText.trim();
+      }
+      return "";
+    };
+
+    const name = getText(['[data-qa="resume-personal-name"]', 'h1.resume-block__title-text', 'h1']);
+    const position = getText(['[data-qa="resume-block-title-position"]', '.resume-block__title', '[data-qa="resume-block-position"] .resume-block__title']);
+
+    let experienceText = "";
+    const expItems = document.querySelectorAll('[data-qa="resume-block-experience-item"]');
+    expItems.forEach((item, i) => {
+      const company = item.querySelector('[data-qa="resume-block-experience-company"]')?.innerText?.trim() || "";
+      const role = item.querySelector('[data-qa="resume-block-experience-position"]')?.innerText?.trim() || "";
+      const duration = item.querySelector('.resume-block__experience-timeinterval')?.innerText?.trim() || "";
+      const desc = item.querySelector('[data-qa="resume-block-experience-description"]')?.innerText?.trim() || "";
+      experienceText += `\n[Место ${i+1}] ${company} — ${role} (${duration})\n${desc}\n`;
+    });
+
+    const skillTags = document.querySelectorAll('[data-qa="bloko-tag__text"]');
+    const skills = Array.from(skillTags).map(t => t.innerText.trim()).join(", ");
+
+    const about = getText(['[data-qa="resume-block-skills-content"]', '[data-qa="resume-block-additional"] .resume-block__content']);
+
+    const eduItems = document.querySelectorAll('[data-qa="resume-block-education-item"]');
+    let educationText = "";
+    eduItems.forEach(item => {
+      educationText += item.innerText.trim() + "\n";
+    });
+
+    const salary = getText(['[data-qa="resume-block-salary"]', '.resume-block__salary']);
+
+    let resumeText = "";
+    if (name) resumeText += `ИМЯ: ${name}\n`;
+    if (position) resumeText += `ДОЛЖНОСТЬ: ${position}\n`;
+    if (salary) resumeText += `ЗАРПЛАТА: ${salary}\n`;
+    if (experienceText) resumeText += `\nОПЫТ РАБОТЫ:${experienceText}`;
+    if (skills) resumeText += `\nНАВЫКИ: ${skills}\n`;
+    if (educationText) resumeText += `\nОБРАЗОВАНИЕ:\n${educationText}`;
+    if (about) resumeText += `\nО СЕБЕ:\n${about}`;
+
+    if (!resumeText.trim()) {
+      resumeText = document.body.innerText;
+    }
+
+    if (resumeText.length > 3000) {
+      resumeText = resumeText.substring(0, 3000) + '\n... (текст обрезан для экономии токенов)';
+    }
+
+    return { success: true, text: resumeText, name, position };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 function getResumeFromPage(tabId) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('timeout')), 5000);
@@ -274,7 +354,7 @@ function getResumeFromPage(tabId) {
       chrome.tabs.sendMessage(tabId, { action: 'getResume' }, response => {
         clearTimeout(timer);
         if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
-        if (response && response.success && response.text) return resolve(response.text);
+        if (response && response.success && response.text) return resolve(response);
         reject(new Error(response?.error || 'Нет данных'));
       });
     } catch (e) {
@@ -290,6 +370,9 @@ function getResumeFromPage(tabId) {
 function renderResults(result) {
   const score = normalizeScore(result.score);
 
+  document.getElementById('resCandidateName').textContent = result.name || 'Кандидат';
+  document.getElementById('resCandidatePos').textContent = result.position || 'Должность не указана';
+
   const circle = document.getElementById('scoreCircle');
   circle.textContent = score;
   circle.style.background = getScoreColor(score);
@@ -298,6 +381,8 @@ function renderResults(result) {
   setTimeout(() => circle.classList.add('pop'), 30);
 
   document.getElementById('scoreLabel').textContent = result.label || getScoreLabel(score);
+
+  document.getElementById('resultsBlock').style.display = 'block';
 
   const fillList = (id, items) => {
     const ul = document.getElementById(id);
@@ -348,8 +433,9 @@ async function onEvaluate() {
 
   loadingBlock.style.display = 'flex';
   resultsBlock.style.display = 'none';
-  evalBtn.disabled = true;
-  evalBtn.textContent = 'Анализируем...';
+  document.getElementById('errorBlock').style.display = 'none';
+  evalBtn.style.display = 'none';
+  document.getElementById('manualInputSection').style.display = 'none';
 
   try {
     // Получаем текст резюме
@@ -358,11 +444,17 @@ async function onEvaluate() {
 
     const [tab] = await new Promise(r => chrome.tabs.query({ active: true, currentWindow: true }, r));
     tabUrl = tab?.url || '';
-    const isHH = /https?:\/\/([a-z-]+\.)?hh\.(kz|ru)\/resume\//.test(tabUrl);
+    const isHH = /https?:\/\/([a-z-]+\.)?(hh\.(ru|kz|uz|by)|rabota\.by)\/resume\//.test(tabUrl);
+
+    let candidateName = '';
+    let candidatePos = '';
 
     if (isHH) {
       try {
-        resumeText = await getResumeFromPage(tab.id);
+        const res = await getResumeFromPage(tab.id);
+        resumeText = res.text || '';
+        candidateName = res.name || '';
+        candidatePos = res.position || '';
       } catch (e) {
         console.log('content.js fallback:', e.message);
       }
@@ -373,7 +465,7 @@ async function onEvaluate() {
     }
 
     if (!resumeText) {
-      throw new Error('Откройте страницу резюме на hh.kz или вставьте текст резюме вручную');
+      throw new Error('Откройте страницу резюме на HeadHunter или вставьте текст резюме вручную');
     }
 
     // Строим промпт
@@ -388,18 +480,40 @@ async function onEvaluate() {
 
     // Запрос к Gemini API
     // Используем gemini-flash-latest — всегда актуальная версия
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts }] })
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    let resp;
+    try {
+      resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts }] }),
+          signal: controller.signal
+        }
+      );
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        throw new Error('Превышено время ожидания (30 секунд). Попробуйте ещё раз.');
       }
-    );
+      if (e instanceof TypeError) {
+        throw new Error('Нет подключения к интернету.');
+      }
+      throw new Error('Произошла ошибка. Попробуйте ещё раз.');
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!resp.ok) {
-      const errData = await resp.json().catch(() => ({}));
-      throw new Error(errData?.error?.message || `HTTP ${resp.status}`);
+      if (resp.status === 401 || resp.status === 403) {
+        throw new Error('Неверный API ключ. Проверьте настройки.');
+      }
+      if (resp.status === 429) {
+        throw new Error('Превышен лимит запросов. Подождите минуту и попробуйте снова.');
+      }
+      throw new Error('Произошла ошибка. Попробуйте ещё раз.');
     }
 
     const data = await resp.json();
@@ -409,14 +523,21 @@ async function onEvaluate() {
     let result;
     try {
       // Сначала пробуем весь текст
-      const cleaned = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+      let cleaned = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+      if (cleaned.startsWith('```') && cleaned.endsWith('```')) {
+        cleaned = cleaned.substring(3, cleaned.length - 3).trim();
+      }
       result = JSON.parse(cleaned);
     } catch (e) {
-      // Ищем JSON-блок внутри текста через regex
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('ИИ вернул неверный формат. Попробуйте ещё раз.');
+      // Ищем первый { и последний }
+      const firstBrace = raw.indexOf('{');
+      const lastBrace = raw.lastIndexOf('}');
+      if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+        throw new Error('ИИ вернул неверный формат. Попробуйте ещё раз.');
+      }
       try {
-        result = JSON.parse(match[0]);
+        const jsonStr = raw.substring(firstBrace, lastBrace + 1);
+        result = JSON.parse(jsonStr);
       } catch (e2) {
         throw new Error('ИИ вернул неверный формат. Попробуйте ещё раз.');
       }
@@ -442,16 +563,10 @@ async function onEvaluate() {
     renderResults(result);
 
   } catch (err) {
-    resultsBlock.style.display = 'block';
-    resultsBlock.innerHTML = `
-      <div style="background:#fff0f0;border:1px solid #f7c1c1;border-radius:7px;
-                  padding:12px;color:#a32d2d;font-size:12.5px;line-height:1.5;">
-        ❌ <strong>Ошибка:</strong> ${err.message}
-      </div>`;
+    document.getElementById('errorBlock').style.display = 'block';
+    document.getElementById('errorText').innerHTML = `❌ <strong>Ошибка:</strong> ${err.message}`;
   } finally {
     loadingBlock.style.display = 'none';
-    evalBtn.disabled = false;
-    evalBtn.textContent = '▶ Оценить кандидата';
   }
 }
 
@@ -536,7 +651,7 @@ async function renderHistory() {
     const bg    = score >= 7 ? '#e8f5e9' : score >= 4 ? '#fff3e0' : '#ffebee';
 
     const linkHtml = item.sourceUrl
-      ? `<a href="${item.sourceUrl}" target="_blank" class="hist-link">🔗 Резюме</a>`
+      ? `<a href="#" data-url="${item.sourceUrl}" class="hist-link open-resume">🔗 Резюме</a>`
       : '';
 
     const card = document.createElement('div');
@@ -551,6 +666,21 @@ async function renderHistory() {
         <span class="score-badge" style="background:${bg};color:${color}">${score}/10</span>
         <button class="hist-replay" title="Посмотреть снова">🔄</button>
       </div>`;
+
+    if (item.sourceUrl) {
+      card.querySelector('.open-resume').addEventListener('click', async (e) => {
+        e.preventDefault();
+        const url = e.target.getAttribute('data-url');
+        const allTabs = await chrome.tabs.query({});
+        const existingTab = allTabs.find(t => t.url === url);
+        if (existingTab) {
+          await chrome.tabs.update(existingTab.id, { active: true });
+          await chrome.windows.update(existingTab.windowId, { focused: true });
+        } else {
+          chrome.tabs.create({ url });
+        }
+      });
+    }
 
     card.querySelector('.hist-replay').addEventListener('click', () => {
       lastResult = item;
@@ -586,7 +716,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Проверяем — открыта ли страница резюме
   try {
     const [tab] = await new Promise(r => chrome.tabs.query({ active: true, currentWindow: true }, r));
-    const isHH = tab && /https?:\/\/([a-z-]+\.)?hh\.(kz|ru)\/resume\//.test(tab.url);
+    const isHH = tab && /https?:\/\/([a-z-]+\.)?(hh\.(ru|kz|uz|by)|rabota\.by)\/resume\//.test(tab.url);
     document.getElementById('warningBanner').style.display = isHH ? 'none' : 'block';
     if (!isHH) document.getElementById('manualInputSection').open = true;
   } catch (e) { /* оставляем баннер */ }
@@ -602,6 +732,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (active) {
       document.getElementById('vacancyDesc').value = active.description || '';
       document.getElementById('clientBrief').value = active.brief || '';
+      briefImageBase64 = active.imageBase64 || '';
+      showImagePreview(briefImageBase64);
     }
   });
 
@@ -609,4 +741,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('evaluateBtn').addEventListener('click', onEvaluate);
   document.getElementById('copyReportBtn').addEventListener('click', onCopyReport);
   document.getElementById('saveToHistoryBtn').addEventListener('click', onSaveToHistory);
+  const resetEvalUI = () => {
+    document.getElementById('resultsBlock').style.display = 'none';
+    document.getElementById('errorBlock').style.display = 'none';
+    document.getElementById('evaluateBtn').style.display = 'block';
+    document.getElementById('manualInputSection').style.display = 'block';
+  };
+  document.getElementById('newEvalBtn').addEventListener('click', resetEvalUI);
+  document.getElementById('newEvalErrBtn').addEventListener('click', resetEvalUI);
 });
